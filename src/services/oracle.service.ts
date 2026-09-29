@@ -45,9 +45,14 @@ class OracleService {
     this._running = true;
   }
 
-  stop(): void {
+  /**
+   * node-cron's `stop()` may return a promise (it awaits in-flight task
+   * teardown), so this is async and awaited at the call site rather than
+   * leaving a floating promise that can reject during shutdown.
+   */
+  async stop(): Promise<void> {
     if (this.cronTask) {
-      this.cronTask.stop();
+      await this.cronTask.stop();
       this.cronTask = null;
     }
     this._running = false;
