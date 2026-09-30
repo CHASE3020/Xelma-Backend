@@ -17,6 +17,10 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll, jest } from "@jest/globals";
+import { webcrypto } from "crypto";
+if (!global.crypto) {
+  global.crypto = webcrypto as any;
+}
 import request from "supertest";
 import { Keypair } from "@stellar/stellar-sdk";
 import { BetMode, BetStatus, NotificationType, PredictionSide, UserRole } from "@prisma/client";
