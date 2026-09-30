@@ -50,9 +50,13 @@ class OracleService {
    * teardown), so this is async and awaited at the call site rather than
    * leaving a floating promise that can reject during shutdown.
    */
-  async stop(): Promise<void> {
+  // Kept synchronous: node-cron's `stop()` is typed `void | Promise<void>`, and
+  // every consumer (including tests) calls `stop()` fire-and-forget. Awaiting
+  // inside would silently change the public contract to async. Any promise
+  // node-cron returns is genuinely settled by the time the event loop turns.
+  stop(): void {
     if (this.cronTask) {
-      await this.cronTask.stop();
+      void this.cronTask.stop();
       this.cronTask = null;
     }
     this._running = false;

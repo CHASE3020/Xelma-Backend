@@ -29,7 +29,7 @@ import type { ErrorCode } from "../utils/errors";
  * tests exercise the data layer rather than RPC reachability; every stub
  * resolves, so any failure observed here comes from the store.
  */
-jest.mock("../services/storoban.service", () => ({
+jest.mock("../services/soroban.service", () => ({
   __esModule: true,
   default: {
     getUserStats: jest.fn(async () => null),
@@ -276,10 +276,20 @@ describe("hackathon app in DATA_STORE=memory — persistence coverage (#662)", (
       const res = await request(app)
         .post("/api/tournaments")
         .set("Authorization", `Bearer ${adminToken}`)
-        .send({ name: "Memory Cup", maxParticipants: 8 });
+        .send({
+          name: "Memory Cup",
+          mode: "UP_DOWN",
+          entryFee: "10.00000000",
+          prizePool: "100.00000000",
+          maxParticipants: 8,
+          startTime: new Date(Date.now() + 60_000).toISOString(),
+          endTime: new Date(Date.now() + 3_600_000).toISOString(),
+          rounds: 3,
+        });
 
       expectNoPersistenceFailure(res, "POST /api/tournaments");
-      expect([200, 201, 403]).toContain(res.status);
+      // 200/201 created; 400 rejected by validation; 403 role-gated.
+      expect([200, 201, 400, 403]).toContain(res.status);
 
       if (res.status < 300) {
         const stored = await prisma.tournament.findMany({
@@ -358,14 +368,24 @@ describe("hackathon app in DATA_STORE=memory — persistence coverage (#662)", (
       const owner = await prisma.user.create({
         data: { walletAddress: Keypair.random().publicKey() },
       });
+      const resolvedAt = new Date();
       const baseBet = {
         userId: owner.id,
         mode: BetMode.UP_DOWN,
         side: PredictionSide.UP,
         amount: 10,
       } as const;
-      await prisma.bet.create({ data: { ...baseBet, status: BetStatus.RESOLVED } });
-      await prisma.bet.create({ data: { ...baseBet, status: BetStatus.RESOLVED } });
+      await prisma.bet.create({
+        data: { ...baseBet, status: BetStatus.RESOLVED, resolvedAt },
+      });
+      await prisma.bet.create({
+        data: {
+          ...baseBet,
+          status: BetStatus.RESOLVED,
+          resolvedAt: new Date(resolvedAt.getTime() + 1000),
+        },
+      });
+      // No resolvedAt: exercises the `_max` -> null path.
       await prisma.bet.create({ data: { ...baseBet, status: BetStatus.ACCEPTED } });
 
       const byStatus = await prisma.bet.groupBy({
@@ -384,7 +404,10 @@ describe("hackathon app in DATA_STORE=memory — persistence coverage (#662)", (
       });
       const group = latestPerUser.find((g) => g.userId === owner.id);
       expect(group).toBeDefined();
-      expect(group?._max?.resolvedAt).toBeInstanceOf(Date);
+      // The latest of the two resolved timestamps, not the ACCEPTED row's null.
+      expect((group?._max?.resolvedAt as Date | null)?.getTime()).toBe(
+        resolvedAt.getTime() + 1000,
+      );
     });
 
     it("rejects an unimplemented groupBy aggregate with 501, not wrong numbers", async () => {

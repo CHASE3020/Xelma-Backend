@@ -577,13 +577,16 @@ export class MemoryCollection<T extends Record<string, unknown>> {
         group._max = Object.fromEntries(
           Object.keys(_max).map((field) => [
             field,
+            // Prisma's `_max` is `null` when no row in the group has a value
+            // (and `null` for SQL NULL), never `undefined` — match that so
+            // callers can rely on `?? null` handling.
             bucket.reduce<unknown>((best, row) => {
               if (row[field] === null || row[field] === undefined) return best;
-              if (best === undefined) return row[field];
+              if (best === null || best === undefined) return row[field];
               return toComparable(row[field]) > toComparable(best)
                 ? row[field]
                 : best;
-            }, undefined),
+            }, null),
           ]),
         );
       }
@@ -868,14 +871,17 @@ function messageModel() {
 }
 
 function predictionModel() {
-  return {
+  // Prototype-chain delegate so the full MemoryCollection surface (create,
+  // deleteMany, groupBy, …) stays available on predictions; the overrides
+  // below only add include-handling for the chat/user history paths.
+  return Object.assign(Object.create(predictions), {
     findMany: async (args: QueryArgs & { include?: any } = {}) => {
       const rows = await predictions.findMany(args);
       return rows.map((row) => withRoundInclude(row, args.include));
     },
     findUnique: predictions.findUnique.bind(predictions),
     count: predictions.count.bind(predictions),
-  };
+  });
 }
 
 // ---------------------------------------------------------------------------

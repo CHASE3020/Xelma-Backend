@@ -42,10 +42,13 @@ class RoundSchedulerService {
       );
    }
 
-   /** Awaits node-cron task teardown; see `oracle.service.ts` for why this is async. */
-   async stop(): Promise<void> {
+   /**
+    * Kept synchronous (node-cron's `stop()` is typed `void | Promise<void>` and
+    * tests call `stop()` fire-and-forget); see `oracle.service.ts`.
+    */
+   stop(): void {
       for (const task of this.cronTasks) {
-         await task.stop();
+         void task.stop();
       }
       this.cronTasks = [];
       logger.info('[Round Scheduler] Stopped');

@@ -160,10 +160,10 @@ export async function startServer(app: Express): Promise<ServerHandle> {
     closeWebSocket();
     if (!apiOnly) {
       priceOracle.stopPolling();
-      await roundSchedulerService.stop();
-      await oracleService.stop();
+      roundSchedulerService.stop();
+      oracleService.stop();
     }
-    await schedulerService.stop();
+    schedulerService.stop();
     httpServer.closeAllConnections();
     await new Promise<void>((resolve) => httpServer.close(() => resolve()));
     await prisma.$disconnect();
